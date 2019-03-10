@@ -28,7 +28,7 @@ SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
 
 _addon.name = 'EasyAssist'
 _addon.author = 'Xathe (Asura)'
-_addon.version = '1.0.0.0'
+_addon.version = '1.0.0.1'
 _addon.commands = {'ea','easyassist'}
 
 require('logger')
@@ -46,25 +46,29 @@ windower.register_event('addon command', function(name)
     if not assist then
         error('Couldn\'t find player %s.':format(name))
         return
-    elseif not assist.in_party or not assist.in_alliance then
+    elseif not assist.in_party and not assist.in_alliance then
         error('That player is not in your group.')
         return
     end
     
     local target = windower.ffxi.get_mob_by_index(assist.target_index)
     if not target then
-        error('Couldn\'t find the player\'s target.')
+        error('That player doesn\'t have a target.')
+        return
+    elseif not target.is_npc or target.spawn_type ~= 16 then
+        error('Player\'s target is not an enemy.')
         return
     end
     
     local player = windower.ffxi.get_player()
     if player.status == 0 then
-        packets.inject(packets.new('incoming', 0x058, {
-            ['Player'] = player.id,
+        packets.inject(packets.new('outgoing', 0x01A, {
             ['Target'] = target.id,
-            ['Player Index'] = player.index,
+            ['Target Index'] = target.index,
+            ['Category'] = 2,
+            ['Param'] = 0
         }))
-        log('Targeting %s.':format(target.name))
+        log('Attacking %s.':format(target.name))
     elseif player.status == 1 then
         packets.inject(packets.new('outgoing', 0x01A, {
             ['Target'] = target.id,
