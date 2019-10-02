@@ -12,3 +12,4 @@ This will cast the correct removal spell for the specified ally. If a name isn't
 
 The following abbreviations are available for addon commands:
 * `statushelper` to `sts`
+* `remove` to `r`
