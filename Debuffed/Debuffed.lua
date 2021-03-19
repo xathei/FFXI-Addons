@@ -54,6 +54,11 @@ defaults.colors.others.red = 255
 defaults.colors.others.green = 255
 defaults.colors.others.blue = 0
 
+debuff_types = {
+    SPELL = 0,
+    JOB_ABILITY = 1
+}
+
 settings = config.load(defaults)
 box = texts.new('${current_string}', settings)
 box:show()
@@ -85,15 +90,21 @@ debuffed_mobs = {}
 function update_box()
     local lines = L{}
     local target = windower.ffxi.get_mob_by_target('t')
-    
+
     if target and target.valid_target and (target.claim_id ~= 0 or target.spawn_type == 16) then
         local data = debuffed_mobs[target.id]
-        
+
         if data then
             for effect, spell in pairs(data) do
-                local name = res.spells[spell.id].name
+                local name = ""
+                if (spell.type == debuff_types.JOB_ABILITY) then
+                    name = res.job_abilities[spell.id].name
+                elseif (spell.type == debuff_types.SPELL) then
+                    name = res.spells[spell.id].name
+                end
+                --local name = res.spells[spell.id].name
                 local remains = math.max(0, spell.timer - os.clock())
-                
+
                 if settings.mode == 'whitelist' and settings.whitelist:contains(name) or settings.mode == 'blacklist' and not settings.blacklist:contains(name) then
                     if settings.timers and remains > 0 then
                         lines:append('\\cs(%s)%s: %.0f\\cr':format(get_color(spell.actor), name, remains))
@@ -151,7 +162,7 @@ function handle_overwrites(target, new, t)
     return true
 end
 
-function apply_debuff(target, effect, spell, actor)
+function apply_debuff(target, effect, spell, actor, debuff_type)
     if not debuffed_mobs[target] then
         debuffed_mobs[target] = {}
     end
@@ -163,7 +174,14 @@ function apply_debuff(target, effect, spell, actor)
     end
     
     -- Create timer
-    debuffed_mobs[target][effect] = {id=spell, timer=(os.clock() + (res.spells[spell].duration or 0)), actor=actor}
+    local baseDuration = 0
+    if (debuff_type == debuff_types.SPELL) then
+        baseDuration = res.spells[spell].duration or 0
+    elseif (debuff_type == debuff_types.JOB_ABILITY) then
+        baseDuration = res.job_abilities[spell].duration or 0
+    end
+
+    debuffed_mobs[target][effect] = {id=spell, timer=(os.clock() + (baseDuration)), actor=actor, type=debuff_type}
 end
 
 function handle_shot(target)
@@ -178,13 +196,25 @@ function handle_shot(target)
 end
 
 function inc_action(act)
+    -- Job abilities
+    if act.category == 14 then
+        local target = act.targets[1].id
+        local abilityId = act.param
+        if S{ 201, 202, 203, 312 }:contains(abilityId) then -- Quickstep, Boxstep, Stutterstep, Featherstep
+            local effect = res.job_abilities[abilityId].status
+            if effect then
+                apply_debuff(target, effect, abilityId, act.actor_id, debuff_types.JOB_ABILITY)
+            end
+        end
+    end
+
     if act.category ~= 4 then
         if act.category == 6 and act.param == 131 then
             handle_shot(act.targets[1].id)
         end
         return
     end
-    
+
     -- Damaging spells
     if S{2,252}:contains(act.targets[1].actions[1].message) then
         local target = act.targets[1].id
@@ -193,7 +223,7 @@ function inc_action(act)
         local actor = act.actor_id
 
         if effect then
-            apply_debuff(target, effect, spell, actor)
+            apply_debuff(target, effect, spell, actor, debuff_types.SPELL)
         end
         
     -- Non-damaging spells
@@ -204,7 +234,7 @@ function inc_action(act)
         local actor = act.actor_id
         
         if res.spells[spell].status and res.spells[spell].status == effect then
-            apply_debuff(target, effect, spell, actor)
+            apply_debuff(target, effect, spell, actor, debuff_types.SPELL)
         end
     end
 end
