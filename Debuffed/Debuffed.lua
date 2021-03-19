@@ -102,7 +102,7 @@ function update_box()
                 elseif (spell.type == debuff_types.SPELL) then
                     name = res.spells[spell.id].name
                 end
-                --local name = res.spells[spell.id].name
+                
                 local remains = math.max(0, spell.timer - os.clock())
 
                 if settings.mode == 'whitelist' and settings.whitelist:contains(name) or settings.mode == 'blacklist' and not settings.blacklist:contains(name) then
